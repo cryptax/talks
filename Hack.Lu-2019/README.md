@@ -1,0 +1,2 @@
+- [Junior CTF Install Party workshop](https://slides.com/invisibleman/juniorctf-1/fullscreen)
+- Smartphone apps: let's talk about privacy [video](https://www.youtube.com/watch?v=M61QM_cXvxs
