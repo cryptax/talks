@@ -18,12 +18,13 @@ This repository contains my papers, slides, workshops.
 - ISSE 2002,
 - USENIX LISA 2004,
 - Nuit du Hack 2015 2017,
-- [Pass The Salt 2018](https://2018.pass-the-salt.org),
+- [Pass The Salt 2018](https://2018.pass-the-salt.org), [2020](https://2020.pass-the-salt.org/)
 - PDPTA 2003,
 - RSA Europe 2011,
 - RSA US 2020,
 - SAR-SSI 2010,
 - SECI 2002,
+- SecSea 2020
 - [ShmooCon](https://www.shmoocon.org) 2011,
 - [SSTIC](https://www.sstic.org) 2017,
 - SISW 2002,
