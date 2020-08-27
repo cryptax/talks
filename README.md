@@ -26,7 +26,11 @@ This repository contains my papers, slides, workshops.
 - RSA US 2020,
 - SAR-SSI 2010,
 - SECI 2002,
+<<<<<<< HEAD
 - [SecSea](https://secsea.org/) 2020,
+=======
+- SecSea 2020
+>>>>>>> 5c06c2d45d7b9da33e99fa454022d7cdb74dacf8
 - [ShmooCon](https://www.shmoocon.org) 2011,
 - [SSTIC](https://www.sstic.org) 2017,
 - SISW 2002,
