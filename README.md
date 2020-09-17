@@ -9,6 +9,7 @@ This repository contains my papers, slides, workshops.
 - [BSides Munich](https://2020.bsidesmunich.org/) 2020,
 - [CARO 2014](https://2014.caro.org),
 - [Confidence 2010](https://2010.confidence.org.pl),
+- [Copenhagen CyberCrime Conference 2020](https://cyberhagen.com),
 - [DefCamp](https://def.camp) 2016,
 - EICAR 2010 and 2012,
 - [GreHack](https://grehack.fr) 2013 2017,
@@ -26,11 +27,7 @@ This repository contains my papers, slides, workshops.
 - RSA US 2020,
 - SAR-SSI 2010,
 - SECI 2002,
-<<<<<<< HEAD
 - [SecSea](https://secsea.org/) 2020,
-=======
-- SecSea 2020
->>>>>>> 5c06c2d45d7b9da33e99fa454022d7cdb74dacf8
 - [ShmooCon](https://www.shmoocon.org) 2011,
 - [SSTIC](https://www.sstic.org) 2017,
 - SISW 2002,
@@ -41,7 +38,10 @@ This repository contains my papers, slides, workshops.
 
 # Topics
 
+- Mobile malware
+- IoT hacking
 - Medical IoT for diabetes
+- Medical IoT and cybercrime
 - Mobile malware and cryptocurrency
 - Smartphone apps privacy
 
