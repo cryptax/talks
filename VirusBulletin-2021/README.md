@@ -1,0 +1,2 @@
+- [Video](https://www.youtube.com/watch?v=ooNVlgV3olk)
+- [Paper](https://vblocalhost.com/uploads/VB2021-Apvrille.pdf)
