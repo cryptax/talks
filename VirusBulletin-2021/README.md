@@ -1,2 +1,3 @@
 - [Video](https://www.youtube.com/watch?v=ooNVlgV3olk)
-- [Paper](https://vblocalhost.com/uploads/VB2021-Apvrille.pdf)
+- [Paper](https://vblocalhost.com/uploads/VB2021-Apvrille.pdf) - **Recommended Read**
+- [Slides](https://vblocalhost.com/uploads/2021/09/VB2021-26.pdf)
