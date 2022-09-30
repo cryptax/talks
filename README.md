@@ -41,7 +41,7 @@ This repository contains my papers, slides, workshops.
 - [Troopers](https://troopers.de) 2018 2020,
 - IEEE TrustCom 2015,
 - [UYBHYS](https://www.unlockyourbrain.bzh) 2020
-- [Virus Bulletin](https://www.virusbtn.com) 2011 2013 2016 2017 2018 2019 2021
+- [Virus Bulletin](https://www.virusbtn.com) 2011 2013 2016 2017 2018 2019 2021 2022
 
 # Topics
 
