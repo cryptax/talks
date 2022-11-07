@@ -1,0 +1,3 @@
+- [slides](./bianlian-vb2022.pdf)
+- [video](https://www.youtube.com/watch?v=DPFcvSy4OZk)
+- [paper](https://www.virusbulletin.com/uploads/pdf/conference/vb2022/papers/VB2022-Hunting-the-Android-BianLian-botnet.pdf)
