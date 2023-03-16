@@ -1,7 +1,7 @@
 ---
 title: Technical notes for Smart Coffee Machine Prodigio/C70
 author: Axelle Apvrille, Fortinet
-date: July 2020
+date: March 2023
 linkcolor: blue
 urlcolor: blue
 citecolor: gray
@@ -13,10 +13,14 @@ papersize: a4
 *Disclaimer*
 The material and information contained in this technical document is for general information purposes only. You should not rely upon the material or information on the document as a basis for making any business, legal or any other decisions.
 
+*History*
+
+- July 2020: main document release.
+- March 2023: updates on eBay links, Mirage is still maintained, nicer print of BLE characteristics tables.
 
 ## Hardware
 
-- [Service Manual](https://www.manualslib.com/manual/1269310/Nescafe-C70.html?page=10#manual)
+- [Service Manual](https://m.buyspares.co.uk/images/mediator/2752/c75%20service%20manual.pdf)
 - [CitiZ teardown](https://www.ifixit.com/Teardown/Nespresso+CitiZ+Teardown/42890)
 - [Similar?](https://fccid.io/MSIP-RRM-FL2-Prodigio)
 - [B10 coffee maker](https://fccid.io/2AUF9)
@@ -27,7 +31,7 @@ Circuit marked: `94V-0 E327373 HQD-K`
 
 - 94V-0: circuits that have met the flammability test
 - E327373 : [Q & D MULTILAYER PCB CO LTD](https://iq.ul.com/pwb/Trade.aspx)
-- You can buy one online for 36 USD [ebay](https://www.ebay.com/itm/Krups-Nespresso-Card-PCB-Keys-Prodigio-XN410-XN411-EN170-EN270-C70-D70-/184132242692)
+- You can buy one online for 36 euros () [ebay](https://www.ebay.com/itm/183595989096)
 
 Onboard, we notice a STM85003 K3T6C 9912N VG MYS 743
 This circuit is used with many different names depending on the brand: Krups XN410T, Delonghi EN170, Magimix 11375, Turmix TX190, Nespresso D70...
@@ -39,7 +43,7 @@ It contains a [Nordic nRF51822 chip](https://www.lairdconnect.com/wireless-modul
 ### Flow Meter
 
 Close to the lower chip, there is a QR code with: `46501-1-1.11-D-1609400629`
-There is another circuit which is the Flow Meter. We can buy one online for 54 AU [ebay](https://www.ebay.com.au/itm/Krups-Nespresso-Card-PCB-Flow-Meter-Prodigio-XN410-XN411-EN170-EN270-C70-D70-/184039391585). It is probably this [Control Module for 30pounds](https://www.4delonghi.co.uk/coffee-maker/nespresso/coffee-maker-control-module/product.pl?pid=3748697&path=606454,641008&refine=pcb)
+There is another circuit which is the Flow Meter. We can buy one online for 25 GBP [ebay](https://www.ebay.co.uk/itm/223597085470). 
 
 ## Bluetooth security modes
 
@@ -98,7 +102,6 @@ To leave GATT menu, `back`.
 
 ### Mirage
 
-*This hasn't been updated since July 2019 and may be obsolete*
 
 - [Repository](https://redmine.laas.fr/projects/mirage)
 - [Paper](https://www.sstic.org/media/SSTIC2019/SSTIC-actes/mirage_un_framework_offensif_pour_laudit_du_blueto/SSTIC2019-Slides-mirage_un_framework_offensif_pour_laudit_du_bluetooth_low_energy-alata_auriol_roux_cayre_nicomette.pdf)
@@ -161,72 +164,68 @@ We have 7 services:
 
 - Generic Access: `00001800-0000-1000-8000-00805f9b34fb`
 - Generic Attribute: `00001801-0000-1000-8000-00805f9b34fb`
-- `06aa1910-f22a-11e3-9daa-0002a5d5c51b`: authentication, machine information, pairing key state, onboarding, serial, `COFFEE_MACHINE_SERVICE_UUID`
+- `06aa1910-f22a-11e3-9daa-0002a5d5c51b`: authorization, machine information, pairing key state, onboarding, serial, `COFFEE_MACHINE_SERVICE_UUID`
 - `06aa1920-f22a-11e3-9daa-0002a5d5c51b`: factory reset, setup complete, machine status, schedule brew `AEROCCINO_SERVICE_UUID`
 - `06aa1930-f22a-11e3-9daa-0002a5d5c51b`: error service
 - `06aa1940-f22a-11e3-9daa-0002a5d5c51b`: general user operations. Cup size and volume.
 - `06aa1950-f22a-11e3-9daa-0002a5d5c51b`: stock, threshold. `ORDER_SERVICE_UUID`
 
-### Coffee service
+### Coffee service (0x1910)
 
-| Characteristic name | Service UUID | Characteristic UUID | Handle | Comments | 
-| --------------------------- | ----------------- | -------------------------- | ----------| --------------- |
-| Machine information | 0x1910         | 0x3A21 | 0x0010 | MachinePropertiesAdapter: `00 6c 00 6d 00 7d 00 76 d2 a7 4c 76 f3 e0`. |
-|                                |                       |              |             | Hardware version, bootloader version, firmware, bluetooth firmware, BT MAC |
-| Serial                       | 0x1910          | 0x3A31 | 0x0012 | SerialAdapter. This is ASCII: `31 36 30 36 39 44 37 30 70 31 33 30 33 36 38 32 30 4e 4a` (serial number). |
-|                                |                       |             |             | This is the only characteristics that can be read without pairing |
-| Authentication Key   | 0x1910          | 0x3A41 | 0x0014 | AuthenticationAdapter - write only. |
-| Pairing key state      | 0x1910          | 0x3A51 | 0x0016 | MachinePropertiesAdapter. Possibilities: ABSENT (0), PRESENT(1 or 2), UNDEFINED (3). I got 02.|
-|                                |                       |             | 0x0017 | To activate notifications |                          
-| Onboarding             | 0x1910           | 0x3A61 | 0x0019 | OnboardingAdapter. Cannot be read. |
+| Characteristic Name | UUID | Handle |
+| ------------------- | ----- | ------ |
+| Machine Information | 0x3a21 | 0x0010 |
+| Serial | 0x3a31 | 0x0012 |
+| Authorization Key | 0x3a41 | 0x0014 |
+| Pairking key state | 0x3a51 | 0x0016. Notif=0x0017 |
+| Onboarding? | 0x3a61 | 0x0019 |
 
-### Aeroccino service
+- Machine information. Characteristic UUID=0x3A21. Handle=0x0010.  `MachinePropertiesAdapter`: `00 6c 00 6d 00 7d 00 76 d2 a7 4c 76 f3 e0`. Hardware version, bootloader version, firmware, bluetooth firmware, BT MAC
 
-| Characteristic name | Service UUID | Characteristic UUID | Handle | Comments | 
-| --------------------------- | ----------------- | -------------------------- | ----------| --------------- |
-|                                |                      | 0x3a11                    | 0x000e | |
-| Machine status         | 0x1920         | 0x3A12                   | 0x001c | MachineMonitoringOperations. You can get notifications. Or read. |
-|                                |                      |                               |             | e.g. `40 02 01 90 00 00 0e f8` |
-|                                |                       |                              | 0x001d | To activate notifications |          
-| Machine Specific      | 0x1920          | 0x3A22 		        | 0x001f | SetupCompleteAdapter. When you open the lid: 00. When it is closed: 02 |
-|                                |                       |                              | 0x0020 | To activate notifications |          
-| Schedule brew         | 0x1920 | 0x3A32 | 0x0022 | BrewOperations. Read programmed brew. Will be `TT TT DD DD DD DD` (T=type, F=temperature, D=duration).  If not scheduled `00 00 00 00 00 00`  |
-| Brew Key                  | 0x1920 | 0x3A42 | 0x0024 | BrewOperations. To cancel brew, write: `03 06 01 02`. |
-|                                 |             |             |              | To brew now, write: `03 05 07 04 SS SS SS SS TT TT` where SS is the delay in *seconds* and TT is the coffee type. |
-|                                 |             |             |              | To brew with temperature,  `03 05 07 04 SS SS SS SS TT TT FF` |
-|                                 |             |             |              | To write a recipe, `01 16 08 00 00 .. recipe` |
-|                                 |             |             |              | To schedule brew, `03 05 07 04 SS SS SS SS TT TT` |
-|                                 |             |             |              | To schedule brew with temperature, `03 05 07 04 SS SS SS SS TT TT FF` |
-|                                 |             |             |              | FactoryResetAdapter, payload: `03 07 00` |
-| Response brew         | 0x1920 | 0x3A52 | 0x0026 | BrewOperations.  |
-|                                 |             |             |              | If you brew espresso: `83 05 01 20 80 80 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ` |
-|                                 |             |             |              | If you cancel: `83 06 01 20 80 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00` |
-|                                 |            |              |              | If you try to brew a americano: error: `c3 05 02 36 01 80 00 00 00 00 00 00 00 00 00 00 00 00 00 00` |
-|                                |                       |    | 0x0027 | To activate notifications |
+- Serial. Characteristic UUID=0x3A31. Handle=0x0012. `SerialAdapter`. This is ASCII: `31 36 30 36 39 44 37 30 70 31 33 30 33 36 38 32 30 4e 4a` (serial number).
 
-Coffee types:
+- Authorization Key. Characteristic UUID=0x3A41. Handle=0x0014. `AuthenticationAdapter` - write only.
 
-- RISTRETTO 0
-- ESPRESSO 1
-- LUNGO 2
-- AMERICANO 5
-- HOT WATER 4
+- Pairing key state. Characteristic UUID=0x3A51. Handle=0x0016.  `MachinePropertiesAdapter`. Possibilities: ABSENT (0), PRESENT(1 or 2), UNDEFINED (3). I got 02. Use handle 0x0017 to activate notifications.
 
-Recipes (doesn't work on my coffee machine, they are for 'expert' models):
+- Onboarding. haracteristic UUID=0x3A61. Handle=0x0019. `OnboardingAdapter`. Cannot be read.
 
-- RECIPE_PREFIX: 01 16 + BrewByteConversion.getSize() = 08
-- RECIPE_ID: 00 00
-- List of ingredient volumes where you select either coffee or water:
-  Coffee: 01 CC CC where CC is coffee volume in ml
-  Water: 02 WW WW where WW is water volume in ml
-- Finish with 00 00 00
 
-A recipe is normally a given volume in ml of coffee then water, or water then coffee.
-With a temperature.
-The acceptable range for coffee is 15mL to 130mL.
-The acceptable range for water is 25mL to 300mL.
+### Aeroccino service (0x1920)
+
+
+| Characteristic Name | UUID | Handle |
+| ------------------- | ----- | ------ |
+| ? | 0x3a11 | 0x000e |
+| Machine Specific (lid status) | 0x3a22 | 0x001f. Notif=0x0020 |
+| Scheduled brew | 0x3a32 | 0x0022 |
+| Brew Key (Command) | 0x3a42 | 0x0024 |
+| Brew Response | 0x3a52 | 0x0026. Notif=0x0027 |
+
+
+- 0x3a11 (handle=0x000e): `40 02 01 90 00 00 0e f8`
+- **"Machine Specific"** (this is the characteristic name). 0x3a22, handle=0x001f, `SetupCompleteAdapter`. When you open the lid: `00`. When it is closed: `02`. To enable notifications, use handle 0x0020
+- **"Scheduled brew"**. 0x3a32, handle=0x0022, `com.nestle.connecteddevices.nespresso.operations.coffeemachine.BrewOperations`. Read programmed brew. Will be `TT TT DD DD DD DD` (T=type, F=temperature, D=duration).  If not scheduled `00 00 00 00 00 00`.
+
+
+#### Brew Key
+
+Characteristic UUID=0x3a42, handle=0x0024:
+
+- To cancel brew, write: `03 06 01 02`.
+- To brew now, write: `03 05 07 04 SS SS SS SS TT TT` where SS is the delay in *seconds* and TT is the coffee type. It is also possible to add temperature: `03 05 07 04 SS SS SS SS TT TT FF` (FF)
+- To write a recipe, `01 16 08 00 00 .. recipe`
+- **Factory reset**: `03 07 00`
+
 
 #### Brew responses
+
+Characteristic UUID=0x3a52, handle=0x0026:
+
+- If you brew espresso: `83 05 01 20 80 80 00 00 00 00 00 00 00 00 00 00 00 00 00 00 `
+- If you cancel: `83 06 01 20 80 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00`
+- If you brew an americano (not supported) `c3 05 02 36 01 80 00 00 00 00 00 00 00 00 00 00 00 00 00 00`
+- To activate notifications, use handle 0x0027
 
 OK starts with `83`:
 
@@ -280,25 +279,61 @@ Ristretto without enough water?
 
 The error codes (which are printed in localized form) are present in `EnumCommandErrorType`.
 
-### Error Service
-
-| Characteristic name | Service UUID | Characteristic UUID | Handle | Comments | 
-| --------------------------- | ----------------- | -------------------------- | ----------| --------------- |
-| Error Selection	  | 0x1930 | 0x3A13 | 0x002a | See ErrorRetrievalOperations. 00 |
-| Error Information     | 0x1930 | 0x3A23 | 0x002c | See ErrorRetrievalOperations. 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |
-
-### 0x1940
-
-| Characteristic name | Service UUID | Characteristic UUID | Handle | Comments | 
-| --------------------------- | ----------------- | -------------------------- | ----------| --------------- |
-| Write Cup Size  Target     | 0x1940         | 0x3A14 | 0x0030 | See CupSizeOperations. 0 is ristretto, 1=espresso, 2=lungo... 00 00 |
-| Volume                    | 0x1940         | 0x3A24 | 0x0032 | See CupSizeOperations. VV VV FF FF where VV is the volume in ml converted to hex. FF FF for -1. 00 00 00 00 |
-|                                | 0x1940         | 0x3A34 | 0x0035 | |
-| Water Hardness and StandBy Delay | 0x1940 | 0x3A44 | 0x0038 | GeneralUserOperations,  |
-|                                 |             |             |               | format is SS SS HH where HH is water hardness level (int <= 4), and SS is the seconds for the stand by delay: 07 08 04 00 |
 
 
-Cup size:
+#### Coffee types
+
+- RISTRETTO 0
+- ESPRESSO 1
+- LUNGO 2
+- AMERICANO 5
+- HOT WATER 4
+
+#### Recipes 
+
+(doesn't work on my coffee machine, they are for 'expert' models):
+
+- RECIPE_PREFIX: 01 16 + BrewByteConversion.getSize() = 08
+- RECIPE_ID: 00 00
+- List of ingredient volumes where you select either coffee or water:
+  Coffee: `01 CC CC` where CC is coffee volume in ml
+  Water: `02 WW WW` where WW is water volume in ml
+- Finish with `00 00 00`
+
+A recipe is normally a given volume in ml of coffee then water, or water then coffee.
+With a temperature.
+The acceptable range for coffee is 15mL to 130mL.
+The acceptable range for water is 25mL to 300mL.
+
+
+
+
+### Error Service 0x1930
+
+| Characteristic name |Characteristic UUID | Handle | Comments | 
+| --------------------------- |  -------------------------- | ----------| --------------- |
+| Error Selection	   | 0x3A13 | 0x002a | See `ErrorRetrievalOperations`. 00 |
+| Error Information  | 0x3A23 | 0x002c | See `ErrorRetrievalOperations`. 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |
+
+### User Options 0x1940
+
+| Characteristic name         | Characteristic UUID | Handle |
+| --------------------------- |  -------------------------- | ----------| 
+| Write Cup Size  Target     |  0x3A14 | 0x0030 | 
+| Volume                    |  0x3A24 | 0x0032 | 
+|  ??                        | 0x3A34 | 0x0035 |
+| Water Hardness and StandBy Delay | 0x3A44 | 0x0038 |
+
+See `CupSizeOperations`:
+
+- Write Cup Size Target: `CZ CZ` where CZ is cup size (see below)
+- Cup Volume: `VV VV FF FF` where `VV` is the volume in ml converted to hex. `FF FF` for -1. 
+
+See `GeneralUserOperations`:
+
+- Water Hardness and StandBy Delay: format is `SS SS HH` where `HH` is water hardness level (int <= 4), and `SS` is the seconds for the stand by delay: `07 08 04 00`
+
+#### Cup size
 
 - RISTRETTO or HOT_WATER_VTP2: 0
 - ESPRESSO or ESPRESSO_VTP2: 1
@@ -314,21 +349,16 @@ Normal volumes are (from doc):
 - espresso 40ml
 - lungo 110ml
 
-Water hardness and standby:
 
-SS = stand by delay option seconds
-HH = water hardness level
-xx SS SS
-HH xx xx
 
 ### 0x1950
 
-| Characteristic name | Service UUID | Characteristic UUID | Handle | Comments | 
-| --------------------------- | ----------------- | -------------------------- | ----------| --------------- |
-| Stock                       | 0x1950 | 0x3A15 | 0x003c | 00 0e - Corresponds to the app's stock. |
-| Stock threshold        | 0x1950 | 0x3A25 | 0x003f | StockOperations. 00 05 |
-| Stock Key                | 0x1950 | 0x3A35 | 0x0041 | StockOperations. 00 00 00 00 |
-|                                | 0x1950 | 0x3a45 | 0x0043 | 01 |
+| Characteristic name  | Characteristic UUID | Handle | Comments | 
+| --------------------------- | -------------------------- | ----------| --------------- |
+| Stock                       | 0x3A15 | 0x003c | 00 0e - Corresponds to the app's stock. |
+| Stock threshold        |  0x3A25 | 0x003f | StockOperations. 00 05 |
+| Stock Key                |  0x3A35 | 0x0041 | StockOperations. 00 00 00 00 |
+|    ??                           |  0x3a45 | 0x0043 | 01 |
 
 ## References
 
