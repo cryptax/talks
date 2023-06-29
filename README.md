@@ -37,8 +37,8 @@ This repository contains my papers, slides, workshops.
 - [SSTIC](https://www.sstic.org) 2017,
 - SISW 2002,
 - Sthack 2019,
-- [THCon](https://thcon.party) 2021,
-- [Troopers](https://troopers.de) 2018 2020,
+- [THCon](https://thcon.party) 2021, 2023
+- [Troopers](https://troopers.de) 2018 2020* 2023,
 - IEEE TrustCom 2015,
 - [UYBHYS](https://www.unlockyourbrain.bzh) 2020
 - [Virus Bulletin](https://www.virusbtn.com) 2011 2013 2016 2017 2018 2019 2021 2022

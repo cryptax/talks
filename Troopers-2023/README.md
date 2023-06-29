@@ -1,0 +1,4 @@
+- [Slides](https://github.com/cryptax/talks/blob/master/Troopers-2023/jump-troopers.pdf)
+- Python program to control the jump rope: [link](https://github.com/cryptax/talks/blob/master/Insomnihack-2023/whad_jumprope.py)
+- [Controlling the jump rope](https://github.com/cryptax/talks/blob/master/Insomnihack-2023/jump-ctrl.mp4) (video)
+- [Getting BLE logs](https://github.com/cryptax/talks/blob/master/Insomnihack-2023/jumprope-ble-logs.mp4) (video)
