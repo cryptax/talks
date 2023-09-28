@@ -8,6 +8,7 @@ This repository contains my papers, slides, workshops.
 - [BlackAlps](https://blackalps.ch) 2018 2019,
 - [Black Hat Europe](https://blackhat.com) 2012 2014,
 - [BotConf](https://botconf.eu) 2020,
+- [BruCON](https://brucon.org) 2023,
 - [BSides Munich](https://2020.bsidesmunich.org/) 2020,
 - [BSides Oslo](https://bsidesoslo.no/) 2021,
 - [CARO 2014](https://2014.caro.org),
