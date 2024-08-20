@@ -1,0 +1,721 @@
+|=-----------------------------------------------------------------------=|
+|=---------------=[ Reversing Dart AOT snapshots ]=----------------------=|
+|=-----------------------------------------------------------------------=|
+|=--------------------------=[ cryptax ]=--------------------------------=|
+|=-----------------------------------------------------------------------=|
+
+-- Table of contents
+
+0 - Introduction
+1 - First steps at disassembling an AOT snapshot
+  1.1 No entry point
+  1.2 Function prologue
+  1.3 Access to strings
+  1.4 Function arguments are pushed on the stack
+  1.5 Small integers are doubled
+2 - Dart assembly registers
+3 - The THR register
+4 - The Dart Object Pool
+5 - Snapshot serialization
+6 - Representation of integers
+7 - Function names
+  7.1 Stripped or non-stripped binaries
+  7.2 Trick for simple programs
+  7.3 Retrieving function names in more complex situations
+8 - Conclusion and perspectives
+
+-- 0 - Introduction
+
+Dart is an object-oriented programming language with a C-style syntax, and a few
+features such as sound null safety. Depending on the desired size vs performance
+trade-off, a Dart program can be compiled in various formats: kernel snapshots
+(the smallest, but the slowest), JIT snapshots, AOT snapshots, and
+self-contained executables (the biggest and fastest) [1]. Dart AOT snapshots
+offer a particular interesting ratio and are therefore used by Flutter release
+builds [2]. Flutter is an open source UI software development kit which offers
+the attractive ability to develop applications with a single code-base and
+compile them natively for Android and iOS, and also non-mobile platforms.
+
+The issue for reverse engineers is that Dart AOT snapshots are notably difficult
+to reverse for the following main reasons:
+
+1. The produced assembly code uses many unique features: specific registers,
+specific convention call, specific encoding of integers.
+
+2. Information about each class used in the snapshot can only be read
+sequentially. There is no random access, meaning that it is necessary to read
+information about lots of potentially non-interesting classes before we get to
+the one we are looking for.
+
+3. The format is not documented and has significantly evolved since the first
+versions.
+
+In this article, we will explain how to understand Dart assembly, and get the
+best out of disassemblers, even when then don't support Dart.
+
+-- 1 - First steps at disassembling an AOT snapshot
+
+To illustrate Dart assembly code, we'll work over a simple implementation of the
+Caesar algorithm in Dart (alphabet translation by 3). We encrypt/decrypt a
+string containing the sentence "Phrack Issue" followed by a randomly selected
+issue number.
+
+
+import 'dart:math'; // for Random
+
+class Caesar {
+  int shift;
+  Caesar({this.shift = 3});
+
+  String encrypt(String message) {
+    StringBuffer ciphertext = StringBuffer();
+    for (int i = 0; i < message.length; i++) {
+    	int charCode = message.codeUnitAt(i);
+    	charCode = (charCode + shift) % 256;
+    	ciphertext.writeCharCode(charCode);
+    }
+    return ciphertext.toString();
+  }
+
+  String decrypt(String ciphertext) {
+    this.shift = -this.shift;
+    String plaintext = this.encrypt(ciphertext);
+    this.shift = -this.shift;
+    return plaintext;
+  }
+}
+
+void main() {
+  print('Welcome to Caesar encryption');
+  
+  List<int> issues = [ 70, 71, 72 ];
+  Random random = Random();
+  final String message = 'Phrack Issue ${issues[random.nextInt(issues.length)]}';
+  var caesar = Caesar();
+
+  // Encrypt
+  String ciphertext = caesar.encrypt(message);
+  print(ciphertext);
+
+  // Decrypt
+  String plaintext = caesar.decrypt(ciphertext);
+  print(plaintext);
+}
+
+
+The source code can be compiled to the "AOT snapshot" output format (.aot
+extension) using the Dart compiler. 
+
+$ dart compile aot-snapshot phrack.dart
+Generated: /tmp/caesar/phrack.aot
+
+The resulting snapshot is quite big for very simple code: 831,352 bytes for the
+non stripped version, and 541,616 bytes for the stripped version (option -S).
+
+Let's begin with the non-stripped AOT snapshot, and load it in a disassembler.
+In this article, we'll use Radare 2 [3], but the result is globally the same
+with any disassembler (IDA Pro, Binary Ninja, Ghidra...).
+
+-- 1.1 - No entry point
+
+First of all, the disassembler fails to identify the entry point:
+
+ERROR: Cannot determine entrypoint, using 0x0004c000
+
+The reason for this is that the disassembler does not understand the format of
+the AOT snapshot. Actually, a "Dart AOT snapshot" contains at least 2 snapshots:
+one AOT snapshot for Dart itself (Dart VM), and one AOT snapshot per isolate.
+
+A Dart isolate is an independent unit of execution that runs concurrently with
+other isolates. Each isolate has its own memory heap, stack and event loop.
+There is always at least 1 isolate, possibly more if the application for
+instance needs to handle background tasks while displaying other data. In the
+example below, the file contains the minimum 2 snapshots.
+
+
+$ objdump -T ./phrack.aot
+./phrack.aot:     file format elf64-x86-64
+
+DYNAMIC SYMBOL TABLE:
+000000000004c000 g    DO .text			0000000000006860 _kDartVmSnapshotInstructions
+0000000000052880 g    DO .text			0000000000046910 _kDartIsolateSnapshotInstructions
+0000000000000200 g    DO .rodata		0000000000008a10 _kDartVmSnapshotData
+0000000000008c40 g    DO .rodata		000000000003f9d0 _kDartIsolateSnapshotData
+00000000000001c8 g    DO .note.gnu.build-id	0000000000000020 _kDartSnapshotBuildId
+
+
+Radare arbitrarily sets 0x4c000 as the entry point because it is the address of
+the first symbol (kDartVmSnapshotInstructions). In reality, the main() of our
+Dart program is contained in a Dart isolate snapshot, and is therefore its code
+is expected to be found within the text segment named
+kDartIsolateSnapshotInstructions.
+
+Fortunately, if the executable is not stripped, we can search for main in
+function names to locate our entry point:
+
+
+[0x0004c000]> afl~main
+0x00096b3c    8    351 main
+0x00097268    3     33 sym.main_1
+
+
+sym.main_1 is a low level main() - just like __libc_start_main in C. The real
+entry point for the Dart program is "main" at 0x00096b3c. In Radare, we go to
+that address with the command "s" followed by the offset, and retrieve the name
+of the current symbol with "is.". See that main() is indeed in
+kDartVmSnapshotInstructions.
+
+
+[0x0004c000]> s main
+[0x00096b3c]> is.
+nth paddr      vaddr      bind   type size   lib name                              demangled
+2   0x00052880 0x00052880 GLOBAL OBJ  289040     _kDartIsolateSnapshotInstructions
+
+
+
+-- 1.2 - Function prologue
+
+The function prologue saves the base pointer on the stack and allocates some
+space. Then, there is an instruction comparing the stack pointer with an offset
+from register 14. What is this doing? 
+
+push rbp
+mov rbp, rsp
+sub rsp, 0x30
+cmp rsp, qword [r14 + 0x38]
+
+
+This is a Dart specificity that we'll discuss later. Let's first ask all the questions.
+
+-- 1.3 - Access to strings
+
+Our program outputs the welcome message "Welcome to Caesar encryption". We
+expect to see those ASCII characters loaded in the main at some point. For
+example, in the assembly produced by a similar C program, we have:
+
+lea rax, str.Welcome_to_Caesar_encryption
+mov rdi, rax     
+call sym.imp.puts
+
+
+The bytes at the address of symbol str.Welcome_to_Caesar_encryption are the
+ASCII characters of the string. Reciprocally, if we search cross references for
+this string ("axt"), we get the address of the lea instruction.
+
+
+[0x000012c2]> s str.Welcome_to_Caesar_encryption
+[0x00002004]> px 20
+- offset -   4 5  6 7  8 9  A B  C D  E F 1011 1213  456789ABCDEF0123
+0x00002004  5765 6c63 6f6d 6520 746f 2043 6165 7361  Welcome to Caesa
+0x00002014  7220 656e                                r en
+[0x00002004]> axt
+main 0x139b [DATA:r--] lea rax, str.Welcome_to_Caesar_encryption
+
+
+With the Dart assembly, we have no such thing. Those are the instructions before
+the first call to print(). One way or another, the string "Welcome to Caesar
+encryption" has to be provided, but we can't see it. We can only assume it is
+referenced by r15 + 0x168f, but what is r15, and where does that go?
+
+
+mov r11, qword [r15 + 0x168f]
+mov qword [rsp], r11
+call sym.printToConsole
+
+
+From another angle, we do find the string in the list of strings ("iz") at
+address 0x00033680, but there is apparently no reference to it ("axt" does not
+return any hit).
+
+
+[0x00096b3c]> iz~Welcome
+2589 0x00033680 0x00033680 28  29   .rodata ascii   Welcome to Caesar encryption
+[0x00096b3c]> axt @ 0x00033680
+
+
+So, this is yet another mystery to solve: how are strings accessed? What is in
+r15? What is at r15 + 0x168f?
+
+-- 1.4 - Function arguments are pushed on the stack
+
+There is something else to notice in the Dart assembly above. Normally, at least
+the first few arguments of a function are copied to dedicated registers (the
+exact registers depend on the platform architecture). In Dart assembly, notice
+how function arguments are copied on the stack:
+
+
+mov qword [rsp], r11
+call sym.printToConsole
+
+
+The argument to method printToConsole() is in r11. This argument is copied at
+the address pointed by rsp, the register stack pointer. This does not follow
+standard conventions [4]. We'll even allow ourselves to digress slightly. On
+x86-64, rsp is the name of the register holding a pointer to the stack. On
+Aarch64, there is normally no such register and Dart creates one, X15, that it
+uses as a stack pointer.
+
+
+-- 1.5 - Small integers are doubled
+
+
+In the Dart assembly code, just after the call to printToConsole, we notice
+startling instructions concerning an array.
+
+
+call sym.printToConsole
+mov rbx, qword [r14 + 0x68]
+mov r10d, 6
+call sym.stub__iso_stub_AllocateArrayStub
+mov qword [var_8h], rax
+mov r11d, 0x8c
+mov qword [rax + 0x17], r11
+mov r11d, 0x8e
+mov qword [rax + 0x1f], r11
+mov r11d, 0x90
+mov qword [rax + 0x27], r11
+
+
+Our Dart source code has a single array: the array of Phrack issues with values
+70, 71 and 72 (in hexadecimal 0x46, 0x47 and 0x48.
+
+
+List<int> issues = [ 70, 71, 72 ];
+
+
+Instead, the code appears to be loading values 0x8c, 0x8 and 0x90. Why? This is
+the final mystery we'll solve in this article.
+
+
+-- 2 - Dart assembly registers
+
+In our previous experiments, we have encountered r14, r15, and we also discussed
+X15 on Aarch64. The source code explains what these registers are affected to.
+For example, this is an excerpt of defined constants for the x86-64 platform.
+
+enum Register {
+  RAX = 0,
+  RCX = 1,
+  RDX = 2,
+  RBX = 3,
+  RSP = 4,  // SP
+  RBP = 5,  // FP
+  RSI = 6,
+  RDI = 7,
+  R8 = 8,
+  R9 = 9,
+  R10 = 10,
+  R11 = 11,  // TMP
+  R12 = 12,  // CODE_REG
+  R13 = 13,
+  R14 = 14,  // THR
+  R15 = 15,  // PP
+  ...
+}
+
+...
+// Caches object pool pointer in generated code.
+const Register PP = R15;
+...
+const Register THR = R14;  // Caches current thread in generated code.
+
+The comments are particularly helpful. We learn Dart features a dedicated
+register pointing to the object pool (PP), and another register pointing to the
+current thread. In Aarch64, the comment explicitly assign x15 as a Stack Pointer
+(SP) "SP in Dart code". The other registers like the Frame Pointer (FP), Link
+Register (LR), Program Counter (PC) use the default values for their
+architecture.
+
++ ------------ + ----- + ----- + ----- +
+|              |  PP   |  THR  |   SP  |
++ ------------ + ----- + ----- + ----- +
+| x86-64       | r15   |  r14  | rsp   | 
+| Aarch32      | r5    |  r10  | r13   |
+| Aarch64      | x27   |  x26  | x15   |
++ ------------ + ----- + ----- + ----- +
+
+-- 3 - The THR register
+
+We just said Dart dedicates a register to holding a pointer to the current
+running thread. This is interesting in a reverse engineering context because the
+offsets to various elements are known. For example, we know that the stack limit
+is at THR + 0x38 (see Dart SDK source code, in
+runtime/vm/compiler/runtime_offsets_extracted.h, and search for
+Thread_stack_limit_offset).
+
+This helps us solve the mystery we mentioned in 1.2. On x86-64, the THR register
+is held by r14. So, the last assembly line compares the stack pointer with the
+stack limit.
+
+
+push rbp 	       		; save base pointer on the stack
+mov rbp, rsp			; update base pointer
+sub rsp, 0x30			; allocate space on the stack
+cmp rsp, qword [r14 + 0x38]	; compare with stack limit
+
+
+In other words, the last instruction ensures that the operation we performed on
+the stack do not go beyond its limit, i.e. that there is no stack overflow.
+
+Similarly, we find that THR + 0x68 is a null object. So, the instructions below
+actually pass a null object as argument to the constructor of the Random class.
+
+
+mov r11, qword [r14 + 0x68] ; store null object in r11
+mov qword [rsp], r11        ; push r11 on the stack
+call sym.new_Random         ; call constructor for Random()
+
+
+-- 4 - The Dart Object Pool
+
+The Object Pool is a table which stores and references frequently used objects,
+immediates and constants within a Dart program.
+
+For example, this is an excerpt of an Object Pool. See how it contains objects
+(InternetAddressType), strings ("Unexpected address type"), lists etc.
+
+
+[pp+0x170] Obj!InternetAddressType@3a7c81 : {
+  off_8: int(0x2)
+}
+[pp+0x178] String: "Unexpected address type "
+[pp+0x180] String: "%"
+[pp+0x188] List(5) [0, 0x2, 0x2, 0x2, Null]
+[pp+0x190] List(5) [0, 0x3, 0x3, 0x3, Null]
+
+
+In the assembly code, objects from the Object Pool are no longer accessed
+directly, but by an offset to the beginning of the pool. This value is held by
+the dedicated PP register.
+
+Let's go back to our string mystery (1.3), where we wondered where the input
+string "Welcome to Caesar encryption" was. Such a string is held in the Object
+Pool. In x86-64, the register to access the pool is r15. We spot it just before
+the call to the encrypt() method. The instruction loads an object from the
+object pool at offset 0x168f, and passes it on the stack as argument to
+printToConsole(). 
+
+
+mov r11, qword [r15 + 0x168f]
+mov qword [rsp], r11
+call sym.printToConsole
+
+
+As this is our first print, and we know it prints "Welcome to Caesar
+encryption", we deduce the string is referenced in the Object Pool by this
+offset. This is because the case is simple. If the reverse engineering were more
+complex, we'd have nothing to guide us, the real issue is that disassemblers do
+not read the Object Pool and let us know what is at a given offset.
+
+-- 5 - Snapshot serialization
+
+Why aren't disassemblers reading the Object Pool? What's difficult about that?
+To answer this question, we need to explain the AOT snapshot format.
+
+A Dart AOT snapshot consists of :
+
+- A Header. It holds a magic value (0xdcdcf5f5), the snapshot size, kind and
+hash. The snapshot hash identifies the Dart SDK version. - A Cluster Information
+structure. A cluster is a set of objects with the same Dart type. The structure
+contains the number of clusters for example. - Several serialized clusters. See
+this as a raw dump of each cluster.
+
++----------------------------- +
++    Dart AOT Header           +
++ ---------------------------- +
++ Cluster Information          +
++ ---------------------------- +
++ Serialized Cluster 1         +
++ ---------------------------- +
++ Serialized Cluster 2         +
++ ---------------------------- +
++ Serialized Cluster 3         +
++ ---------------------------- +
++            ...               +
++ ---------------------------- +
+
+For reverse engineering, we wish to parse the AOT snapshot format. Reading the
+header is easy. This is the snapshot header of our Phrack AOT snapshot, parsed
+with [5].
+
+-----------
+Snapshot
+	offset  = 35904 (0x8c40)
+	size    = 92106
+	kind    = SnapshotKindEnum.kFullAOT
+	dart sdk version = 3.3.0
+	features= product no-code_comments no-dwarf_stack_traces_mode
+	no-lazy_dispatchers dedup_instructions no-tsan no-asserts x64 linux
+	no-compressed-pointers null-safety
+-----------
+
+Reading the Cluster Information is slightly more difficult because it uses a
+custom LEB128 format, but once we're aware of that, it poses no more difficulty.
+
+The complexity lies with reading serialized clusters. While we are mostly
+interested in the serialized Object Pool (yes, the Object Pool is a Dart type,
+therefore it is serialized in its own cluster), the Dart SDK has over 150
+clusters. Unfortunately, there is no way to reach a given cluster (e.g. the
+Object Pool), we must de-serialize each cluster one by one until we reach the
+one we are interested in. Said differently, there is no random access in the
+snapshot, only sequential access. So, to de-serialize the Object Pool, we must
+actually implement de-serialization of all clusters, because we have no idea
+which cluster will be dumped before the Object Pool.
+
+This is lots of work, and an additional issue is that the Dart AOT format is not
+officially documented and continues to evolve with new Dart SDK versions. New
+versions change flags (for example, the header flag which uses to indicate a
+"generic snapshot" is now used to identify an AOT snapshot), but also many
+clusters have appeared. This is why tools such as Darter [6] and Doldrum [7]
+unfortunately no longer work. In theory, those tools could be ported to the
+current Dart SDK version, but it would require extensive work, and we do not
+know how long that work would remain operational.
+
+To circumvent this issue, Blutter [8] uses another strategy. It implements a
+Dart AOT snapshot dumper, compiled with the appropriate Dart SDK, and uses it to
+parse the input snapshot. The tool reads the Object Pool and dumps annotated
+assembly code. Currently, it is however limited to Flutter applications for
+Android on Aarch64.
+
+-- 6 - Representation of integers
+
+Dart actually supports 2 types of integers: small integers (SMI) and big
+integers... which are actually called "Mint" for Medium Integer. Small integers
+fit on 31 bits. If they don't fit, they use the Mint type. The least significant
+bit is reserved as an indicator: 0 for SMI, and 1 for Mint.
+
++ -------------------------------- + - +
+| 31 30 39 ..................... 1 | 0 |
++ -------------------------------- + - +
+| Value                            | I |
++ -------------------------------- + - +
+
+The immediate consequence to this design choice is that all small integers appear to have their value
+multiplied by 2.
+
+If we go back to the assembly of 1.5, the instructions appear to be loading values 0x8c, 0x8e and 0x90.
+
+mov r10d, 6
+call sym.stub__iso_stub_AllocateArrayStub
+mov qword [var_8h], rax
+mov r11d, 0x8c
+mov qword [rax + 0x17], r11
+mov r11d, 0x8e
+mov qword [rax + 0x1f], r11
+mov r11d, 0x90
+mov qword [rax + 0x27], r11
+
+
+However, if we look more closely according to Dart's representation, the least
+significant bit of each of those values is 0. Thus, they are SMIs and their
+value fits on bits 1-31. The represented values are consequently 0x8c / 2 = 70,
+71 and 72 - which are the 3 integers we put in our integer array.
+
+The same applies to the first instruction: the apparent value of 6 is provided
+as argument to the array stub function. This is a SMI, so we are initializing an
+array of 3 cells (6 divided by 2).
+
+For reverse engineering, knowing about this integer representation is
+particularly useful when strings are represented as lists of ASCII code values.
+When the ASCII code for character A is 0x41, the assembly will actually need to
+load a hexadecimal literal of 0x82.
+
+In Radare, the representation of Small Integers can be handled by a simple
+r2pipe script [9]. For example, in the assembly below, the comments for the 3
+small integers were generated by the script.
+
+
+mov r11d, 0x8c              ; Load 0x46 (decimal=70, character="F")
+mov qword [rax + 0x17], r11
+mov r11d, 0x8e              ; Load 0x47 (decimal=71, character="G")
+mov qword [rax + 0x1f], r11
+mov r11d, 0x90              ; Load 0x48 (decimal=72, character="H")
+mov qword [rax + 0x27], r11
+
+
+-- 7 - Function names
+
+-- 7.1 - Stripped or non-stripped binaries
+
+When Dart AOT snapshots are not stripped, disassemblers easily find function
+names. For example, those are all methods of the Caesar class:
+
+
+[0x0009ec7c]> afl~Caesar
+0x00096c9c    3     80 sym.Caesar.decrypt
+0x00096d28   10    245 sym.Caesar.encrypt
+0x00096e20    1     11 sym.new_Caesar
+
+
+But, naturally, AOT snapshots can be stripped (-S option at compilation time)
+and disassemblers are unable to recover function names and generate dummy names
+instead.
+
+0x00050d34   20    490 fcn.00050d34
+0x0005a0d8    3    121 fcn.0005a0d8
+0x0005c440    6    129 fcn.0005c440
+0x0007d210    1     30 fcn.0007d210
+0x000768d0    1     90 fcn.000768d0
+
+
+It is then particularly difficult to spot the main() or methods of the Caesar
+class. They (probably) won't be at the same address, and there is no easy way to
+locate them, as the assembly code contains no noticeable string (and no access
+to the Object Pool) and no function name.
+
+-- 7.2 - Trick for simple programs
+
+In simple programs, we can search for particular instructions. For example, our
+main() initializes an array of integers. Assigning the first value is done with
+the instruction "mov r11d, 0x8c". We can search for this instruction.
+
+Note this technique is unlikely to yield good results in a real reverse
+engineering situation, because (1) we don't know what to look for, (2) we don't
+have access to the non stripped version, and (3) searching for an instruction
+will return too many hits.
+
+In the case of our simple Caesar program, the trick works and we are extremely
+lucky to have a single hit.
+
+[0x0007451f]> /ad mov r11d, 0x8c
+0x000744b5         41bb8c000000  mov r11d, 0x8c
+
+With several hits, we would have had to inspect the assembly lines around the
+hit and check if it matches what the main() is expected to do.
+
+We recognize the main as function fcn.00074480 (in Radare, command "afi" tells
+you which function you are in, and "pi 15" disassemble 15 instructions).
+
+[0x00034000]> s 0x000744b5
+[0x000744b5]> afi~name
+name: fcn.00074480
+[0x000744b5]> s fcn.00074480
+[0x00074480]> pi 15
+push rbp
+mov rbp, rsp
+sub rsp, 0x28
+cmp rsp, qword [r14 + 0x38]
+jbe 0x745cd
+mov r11, qword [r15 + 0x166f]
+mov qword [rsp], r11
+call fcn.00074ac4
+mov rbx, qword [r14 + 0x68]
+mov r10d, 6
+call fcn.0007e968
+mov qword [var_8h], rax
+mov r11d, 0x8c
+mov qword [rax + 0x17], r11
+mov r11d, 0x8e
+
+-- 7.3 - Retrieving function names in more complex situations
+
+There are currently 3 workarounds:
+
+1. JEB Pro Disassembler [10]. It is able to read the Object Pool and retrieve
+function names in most situations. However, the tool is not free and a license
+must be purchased.
+
+2. reFlutter [11]. This open source tool patches the Flutter library to dump
+function name offsets when it runs into them. The drawback with this tool is
+that (1) it only works with Flutter applications, not plain Dart snapshots, (2)
+the application needs to be recompiled with the patched library, and (3) it is a
+dynamic analysis approach, meaning reFlutter actually runs the application and
+only dumps parts it gets into.
+
+3. Blutter [8] is an other open source tool we have already mentioned in
+paragraph 5. It dumps assembly code with function names and their corresponding
+offset. The tool currently only supports Android Flutter applications generated
+for Aarch64.
+
+For example, I have created a basic application with a basic widget implementing
+the Caesar algorithm. The application has a class MyApp, with a constructor and
+2 methods: build(), which creates the widget, and work() which performs Caesar
+encryption/decryption. I compiled the application for Android Aarch64 and used
+Blutter on it.
+
+// class id: 1442, size: 0xc, field offset: 0xc
+//   const constructor, 
+class MyApp extends StatelessWidget {
+
+  _ build(/* No info */) {
+    // ** addr: 0x221aec, size: 0x120
+    // 0x221aec: EnterFrame
+    //     0x221aec: stp             fp, lr, [SP, #-0x10]!
+    //     0x221af0: mov             fp, SP
+    // 0x221af4: AllocStack(0x28)
+    //     0x221af4: sub             SP, SP, #0x28
+    // 0x221af8: CheckStackOverflow
+    //     0x221af8: ldr             x16, [THR, #0x38]  ; THR::stack_limit
+    ...
+    
+  _ work(/* No info */) {
+    // ** addr: 0x221c24, size: 0x288
+    // 0x221c24: EnterFrame
+    ...
+
+The dumped assembly shows:
+
+- The address of build(): 0x221aec
+- The address of xor_stage3(): 0x221c24
+- And the instructions for both methods.
+
+The instructions are annotated with the function name or the pool object when
+the case applies, making the assembly easier to understand. For example, see how
+Blutter shows the string "Welcome to Caesar encryption":
+
+    // 0x221c78: r16 = "Welcome to Caesar encryption"
+    //     0x221c78: ldr             x16, [PP, #0x6e40]  ; [pp+0x6e40] "Welcome to Caesar encryption"
+    // 0x221c7c: str             x16, [SP]
+    // 0x221c80: r0 = printToConsole()
+    //     0x221c80: bl              #0x159df4  ; [dart:_internal] ::printToConsole
+
+
+Finally, remember that in paragraph 3, we noticed the x86-64 assembly was
+passing a null object, via THR + 0x68, as argument to the constructor of the
+Random class. In Blutter, we see the assembly for Aarch64 is different. It
+doesn't use the THR register for that and explicitly passes NULL.
+
+
+    // 0x221cac: str             NULL, [SP]
+    // 0x221cb0: r0 = Random()
+    //     0x221cb0: bl              #0x206268  ; [dart:math] Random::Random
+
+
+Overall, the different annotations of Blutter make assembly easier to read, and
+it would be helpful to have them for other platforms and integrate the same
+features in disassemblers. 
+
+-- 8 - Conclusion and perspectives
+
+With this article, you should be able to understand the format of Dart AOT
+snapshots, and grasp the complexity to parse the Object Pool or de-serialize any
+cluster.
+
+We have explained the use of the dedicated THR and PP registers. You are able to
+understand the assembly of function prologues, how strings or any other object
+of the object pool is loaded, and how lists of integers are represented.
+
+We have also provided tricks and tools to parse the Object Pool and recover
+function names, even in the case of stripped snapshots.
+
+Major disassemblers are likely to add support for Dart in the next few months or
+years. However, this is really only viable if the Dart SDK becomes stable enough
+for such work to be worth it. Meanwhile, we seem better off integrating
+strategies, such as Blutter, which recompile tools from the Dart SDK.
+
+-- References
+
+[1] https://dart.dev/tools/dart-compile#types-of-output
+[2] https://flutter.dev
+[3] https://www.radare.org/
+[4] https://en.wikipedia.org/wiki/X86_calling_conventions#x86-64_calling_conventions
+[5] https://github.com/cryptax/misc-code/blob/master/flutter/flutter-header.py
+[6] https://github.com/mildsunrise/darter
+[7] https://github.com/rscloura/Doldrums
+[8] https://github.com/worawit/blutter
+[9] https://github.com/cryptax/misc-code/blob/master/flutter/dart-bytes.py
+[10] https://pnfsoftware.com
+[11] https://github.com/Impact-I/reFlutter
+
+
+
