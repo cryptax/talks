@@ -1,0 +1,2 @@
+- slides: ./r2ai.pdf
+- 3 demos (play with `asciinema play filename`): `r2ai-devura.cast` (demo of r2ai on Linux/Devura), `goldoon.decai.cast` (demo of decai on Goldoon), `rudedevil.decrypt.cast` (deobfuscating strings of Linux/RudeDevil).
