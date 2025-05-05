@@ -1,0 +1,3 @@
+- Slides: *coming soon*
+- [Using r2ai to reverse Linux/ShellCode_ConnectBack.H!tr](./shellcode.cast). View it with asciinema: `asciinema play shellcode.cast`
+- [Using r2ai to de-obfuscate strings in Linux/Ladvix.E](./ladvix-deobfuscate.cast)
